@@ -14,7 +14,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { projectService, Project } from '../../services/projectService';
 import { chatService, ChatMessage } from '../../services/chatService';
-import { callAI } from '../../services/aiService';
+import { sendModelingMessage } from '../../services/modelingService';
 import MessageContent from '../../components/renderers/MessageContent';
 
 export default function ProjectChatScreen() {
@@ -67,26 +67,51 @@ export default function ProjectChatScreen() {
     setInputText('');
     setIsLoading(true);
 
-    try {
-      // 1. Save user message to DB
-      const userMsg = await chatService.saveMessage(project.id, 'user', userText);
-      setMessages(prev => [...prev, userMsg]);
+    // Optimistic update for UI
+    const tempUserMsg: ChatMessage = {
+      id: 'temp-' + Date.now(),
+      project_id: project.id,
+      user_id: '', // Not needed for UI
+      role: 'user',
+      content: userText,
+      created_at: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, tempUserMsg]);
 
-      // 2. Call AI
-      const history = messages.slice(-5).map(m => `${m.role}: ${m.content}`).join('\n');
-      const aiResponse = await callAI({
-        feature: 'Project Modeling',
-        userMessage: userText,
-        context: `Project Title: ${project.title}\nProject Description: ${project.description}\nRecent History:\n${history}`,
-        maxTokens: 3000
+    try {
+      // Call new backend modeling API (it handles saving user/assistant messages)
+      const response = await sendModelingMessage({
+        project_id: project.id,
+        message: userText
       });
 
-      // 3. Save AI message to DB
-      const aiMsg = await chatService.saveMessage(project.id, 'assistant', aiResponse);
-      setMessages(prev => [...prev, aiMsg]);
+      // Update messages from the response
+      const aiMsg: ChatMessage = {
+        id: response.message_id,
+        project_id: project.id,
+        user_id: '',
+        role: 'assistant',
+        content: response.content,
+        created_at: new Date().toISOString()
+      };
+      
+      // Remove the temp message and add the real ones (or just re-fetch)
+      // For simplicity, we just add the assistant message and assume user msg is saved
+      setMessages(prev => {
+        const filtered = prev.filter(m => m.id !== tempUserMsg.id);
+        // We add both back to ensure we have the DB version (or just the assistant one)
+        return [...filtered, { ...tempUserMsg, id: 'saved-' + Date.now() }, aiMsg];
+      });
+
+      // Show usage info if needed
+      if (response.usage.used >= response.usage.limit * 0.8) {
+        console.warn(`Usage alert: ${response.usage.used}/${response.usage.limit} tokens used.`);
+      }
 
     } catch (err: any) {
       console.error('Chat error:', err);
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
       alert('发送失败: ' + (err.message || '未知错误'));
     } finally {
       setIsLoading(false);
