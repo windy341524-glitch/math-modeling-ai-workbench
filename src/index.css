@@ -1,0 +1,29 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #24389c;
+  --color-primary-container: #3f51b5;
+  --color-on-primary: #ffffff;
+  --color-secondary: #632ce5;
+  --color-secondary-container: #7c4dff;
+  --color-tertiary: #404346;
+  --color-surface: #f9f9fc;
+  --color-surface-dim: #dadadc;
+  --color-surface-container: #eeeef0;
+  --color-surface-container-high: #e8e8ea;
+  --color-surface-container-lowest: #ffffff;
+  --color-background: #f9f9fc;
+  --color-on-surface: #1a1c1e;
+  --color-on-surface-variant: #454652;
+  --color-outline: #757684;
+  --color-outline-variant: #c5c5d4;
+
+  --font-sans: "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-surface font-sans antialiased;
+  }
+}
