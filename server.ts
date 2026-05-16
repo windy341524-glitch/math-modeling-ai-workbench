@@ -27,46 +27,7 @@ async function startServer() {
     // baseURL: "https://api.deepseek.com", // Uncomment if using DeepSeek
   });
 
-  // API Route for AI Chat via Gemini SDK
-  app.post("/api/ai-chat", async (req, res) => {
-    try {
-      const apiKey = process.env.AI_API_KEY || process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ error: "AI_API_KEY / GEMINI_API_KEY is missing." });
-      }
-
-      const { systemPrompt, userMessage, maxTokens } = req.body;
-
-      if (!userMessage) {
-        return res.status(400).json({ error: "userMessage is required." });
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-
-      const config: any = {
-        systemInstruction: systemPrompt,
-      };
-
-      if (maxTokens) {
-        config.maxOutputTokens = maxTokens;
-      }
-
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: userMessage,
-        config: config
-      });
-
-      if (!response.text) {
-        throw new Error("No response from Gemini.");
-      }
-
-      res.json({ text: response.text });
-    } catch (error: any) {
-      console.error("AI API Error:", error.message || error);
-      res.status(500).json({ error: error.message || "Failed to call AI API." });
-    }
-  });
+  // No more legacy /api/ai-chat. All calls must go through authenticated /api/modeling/chat.
 
   // NEW: Mathematical Modeling AI Chat Endpoint
   app.post("/api/modeling/chat", async (req, res) => {
@@ -83,41 +44,72 @@ async function startServer() {
         return res.status(401).json({ error: "Invalid or expired token" });
       }
 
-      const { project_id, message } = req.body;
+      let { project_id, message } = req.body;
 
-      if (!project_id || !message) {
-        return res.status(400).json({ error: "project_id and message are required" });
+      if (!message) {
+        return res.status(400).json({ error: "message is required" });
       }
 
-      // 1. Check project ownership
-      const { data: project, error: projectError } = await supabaseAdmin
-        .from("modeling_projects")
-        .select("id")
-        .eq("id", project_id)
-        .eq("user_id", user.id)
-        .single();
+      // If no project_id, find or create a default "General" project for this user
+      if (!project_id) {
+        const { data: defaultProject, error: findError } = await supabaseAdmin
+          .from("modeling_projects")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("title", "通用 AI 助手")
+          .maybeSingle();
 
-      if (projectError || !project) {
-        return res.status(403).json({ error: "Project not found or access denied" });
+        if (findError) throw new Error("Failed to search for default project");
+
+        if (defaultProject) {
+          project_id = defaultProject.id;
+        } else {
+          const { data: newProject, error: createError } = await supabaseAdmin
+            .from("modeling_projects")
+            .insert({
+              user_id: user.id,
+              title: "通用 AI 助手",
+              description: "用于课程答疑和通用数学建模咨询的项目",
+              status: "active"
+            })
+            .select()
+            .single();
+          
+          if (createError) throw new Error("Failed to create default project");
+          project_id = newProject.id;
+        }
+      } else {
+        // 1. Check project ownership
+        const { data: project, error: projectError } = await supabaseAdmin
+          .from("modeling_projects")
+          .select("id")
+          .eq("id", project_id)
+          .eq("user_id", user.id)
+          .single();
+
+        if (projectError || !project) {
+          return res.status(403).json({ error: "Project not found or access denied" });
+        }
       }
 
-      // 2. Check token usage (Limit: 100)
+      // 2. Check daily token usage (Limit: 10,000)
       const { data: usageLogs, error: usageError } = await supabaseAdmin
         .from("ai_usage_logs")
         .select("tokens_used")
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
 
       if (usageError) {
         throw new Error("Failed to check usage logs");
       }
 
-      const totalUsed = usageLogs.reduce((sum, log) => sum + (log.tokens_used || 0), 0);
-      const TOKEN_LIMIT = 100;
+      const dailyUsed = usageLogs.reduce((sum, log) => sum + (log.tokens_used || 0), 0);
+      const DAILY_LIMIT = parseInt(process.env.DAILY_TOKEN_LIMIT || "10000", 10);
 
-      if (totalUsed >= TOKEN_LIMIT) {
+      if (dailyUsed >= DAILY_LIMIT) {
         return res.status(403).json({ 
-          error: "Token limit reached", 
-          message: `You have used ${totalUsed}/${TOKEN_LIMIT} tokens. Please upgrade for more access.` 
+          error: "Daily token limit reached", 
+          message: `You have used ${dailyUsed}/${DAILY_LIMIT} tokens today. Please come back tomorrow or upgrade for more access.` 
         });
       }
 
@@ -211,8 +203,8 @@ Constraints:
         parsed: parsedContent,
         outputs: outputs,
         usage: {
-          used: totalUsed + tokensUsed,
-          limit: TOKEN_LIMIT
+          used: dailyUsed + tokensUsed,
+          limit: DAILY_LIMIT
         }
       });
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FileText, CheckCircle, Edit3, Lock, FileJson, ChevronDown, ChevronUp, Bot, Sigma, BookOpen, Loader2 } from 'lucide-react';
 import TopBar from '../components/TopBar';
-import { callAI } from '../services/aiService';
+import { sendModelingMessage } from '../services/modelingService';
 
 export default function PaperScreen({ navigate }: any) {
   const [draftContent, setDraftContent] = useState(`1. We assume the traffic flow is incompressible within the designated urban grid...\n2. Weather conditions are considered optimal and consistent throughout the data gathering period to minimize external variables...`);
@@ -12,12 +12,10 @@ export default function PaperScreen({ navigate }: any) {
     setIsGenerating(true);
     try {
       const prompt = `针对"城市物流效率分析"的模型假设部分，请生成一段学术初稿。要求包含合理化约束和逻辑。`;
-      const response = await callAI({
-        feature: 'Paper Outline Generation',
-        userMessage: prompt,
-        maxTokens: 2000
+      const response = await sendModelingMessage({
+        message: prompt
       });
-      setDraftContent(response);
+      setDraftContent(response.content);
     } catch (err: any) {
       alert(`AI生成失败: ${err.message}`);
     } finally {

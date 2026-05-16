@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 export interface ModelingChatRequest {
-  project_id: string;
+  project_id?: string;
   message: string;
 }
 

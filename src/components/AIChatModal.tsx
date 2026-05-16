@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Bot, Send, X, Copy, Trash2, Sparkles, Loader2 } from 'lucide-react';
-import { callAI, getAITokenUsage } from '../services/aiService';
+import { sendModelingMessage } from '../services/modelingService';
 
 interface AIChatModalProps {
   isOpen: boolean;
@@ -20,6 +20,7 @@ export default function AIChatModal({ isOpen, onClose, feature, context, initial
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [usageInfo, setUsageInfo] = useState({ used: 0, limit: 10000 });
 
   // When opened with an initialPrompt, send it immediately
   // But wait! useEffect will trigger safely
@@ -41,13 +42,11 @@ export default function AIChatModal({ isOpen, onClose, feature, context, initial
     setChatHistory(newChatHistory);
     
     try {
-      const response = await callAI({
-        feature,
-        userMessage: text,
-        context,
-        maxTokens
+      const response = await sendModelingMessage({
+        message: text
       });
-      setChatHistory([...newChatHistory, { role: 'ai', content: response }]);
+      setChatHistory([...newChatHistory, { role: 'ai', content: response.content }]);
+      setUsageInfo(response.usage);
     } catch (err: any) {
       setChatHistory([...newChatHistory, { role: 'ai', content: `Error: ${err.message}` }]);
     } finally {
@@ -76,7 +75,7 @@ export default function AIChatModal({ isOpen, onClose, feature, context, initial
             </div>
             <div>
               <h3 className="font-bold text-sm text-on-surface">{feature}</h3>
-              <div className="text-[10px] text-on-surface-variant">{getAITokenUsage().remainingTokens.toLocaleString()} tokens left</div>
+              <div className="text-[10px] text-on-surface-variant">今日额度: {(usageInfo.limit - usageInfo.used).toLocaleString()} tokens</div>
             </div>
           </div>
           <div className="flex items-center gap-2">

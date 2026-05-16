@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Upload, ScanLine, BarChart3, Workflow, AlignLeft, Send, Sparkles, ChevronRight, Bot, Loader2, StopCircle, RefreshCw, Trash2, Copy } from 'lucide-react';
 import TopBar from '../components/TopBar';
-import { callAI, getAITokenUsage } from '../services/aiService';
+import { sendModelingMessage } from '../services/modelingService';
 
 interface ChatMessage {
   role: 'user' | 'ai';
@@ -14,6 +14,7 @@ export default function AIScreen({ navigate, initialText = '' }: any) {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingFeature, setLoadingFeature] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState('');
+  const [usageInfo, setUsageInfo] = useState({ used: 0, limit: 10000 });
   
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -39,14 +40,12 @@ export default function AIScreen({ navigate, initialText = '' }: any) {
     setChatHistory(prev => [...prev, userMsg]);
     
     try {
-      const response = await callAI({
-        feature,
-        userMessage: promptText,
-        context: chatHistory.map(m => `${m.role}: ${m.content}`).join('\n'),
-        maxTokens: aiMaxTokens
+      const response = await sendModelingMessage({
+        message: promptText
       });
       
-      setChatHistory(prev => [...prev, { role: 'ai', content: response }]);
+      setChatHistory(prev => [...prev, { role: 'ai', content: response.content }]);
+      setUsageInfo(response.usage);
     } catch (err: any) {
       setChatHistory(prev => [...prev, { role: 'ai', content: `Error: ${err.message}` }]);
     } finally {
@@ -85,7 +84,7 @@ export default function AIScreen({ navigate, initialText = '' }: any) {
           className="w-full h-24 bg-transparent resize-none focus:outline-none text-sm font-medium"
         ></textarea>
         <div className="flex justify-between items-center border-t border-surface-dim/30 pt-3 mt-2">
-           <div className="text-xs text-outline">{getAITokenUsage().remainingTokens.toLocaleString()} tokens left</div>
+           <div className="text-xs text-outline">今日额度: {(usageInfo.limit - usageInfo.used).toLocaleString()} tokens</div>
            <div className="flex justify-end gap-2">
              <button className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container text-on-surface-variant rounded-lg text-xs font-bold hover:bg-surface-dim/50 transition-colors">
                <Upload className="w-3.5 h-3.5" /> 上传
