@@ -16,11 +16,22 @@ export interface ModelingChatResponse {
   };
 }
 
+export class ModelingAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ModelingAuthError';
+  }
+}
+
+export function isModelingAuthError(error: unknown) {
+  return error instanceof ModelingAuthError || (error as any)?.name === 'ModelingAuthError';
+}
+
 export async function sendModelingMessage(params: ModelingChatRequest): Promise<ModelingChatResponse> {
   const { data: { session } } = await supabase.auth.getSession();
   
   if (!session) {
-    throw new Error('User must be authenticated to use the AI Workbench.');
+    throw new ModelingAuthError('请先登录后再使用 AI Workbench。');
   }
 
   const response = await fetch('/api/modeling/chat', {
@@ -32,10 +43,18 @@ export async function sendModelingMessage(params: ModelingChatRequest): Promise<
     body: JSON.stringify(params)
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
+
+  if (response.status === 401) {
+    await supabase.auth.signOut();
+    throw new ModelingAuthError(data.error === 'Invalid or expired token'
+      ? '登录状态已过期，请重新登录。'
+      : '请先登录后再使用 AI Workbench。'
+    );
+  }
 
   if (!response.ok) {
-    throw new Error(data.error || 'Failed to communicate with Modeling AI.');
+    throw new Error(data.message || data.error || 'Failed to communicate with Modeling AI.');
   }
 
   return data;

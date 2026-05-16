@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom';
+
 import { Mail, Lock, Loader2, LogIn, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -10,6 +11,11 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const redirectTarget = sanitizeRedirect(
+    searchParams.get('redirect') || (location.state as any)?.from?.pathname
+  ) || '/';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,7 +31,7 @@ export default function LoginScreen() {
       setError(error.message);
       setLoading(false);
     } else {
-      navigate('/app');
+      navigate(redirectTarget, { replace: true });
     }
   };
 
@@ -105,11 +111,23 @@ export default function LoginScreen() {
 
         <p className="text-center text-sm text-on-surface-variant">
           还没有账号？{' '}
-          <Link to="/register" className="font-bold text-primary hover:text-primary-dim">
+          <Link to={`/register?redirect=${encodeURIComponent(redirectTarget)}`} className="font-bold text-primary hover:text-primary-dim">
             立即注册
           </Link>
         </p>
       </motion.div>
     </div>
   );
+}
+
+function sanitizeRedirect(value?: string | null) {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) {
+    return null;
+  }
+
+  if (value.startsWith('/login') || value.startsWith('/register') || value.startsWith('/forgot-password')) {
+    return null;
+  }
+
+  return value;
 }

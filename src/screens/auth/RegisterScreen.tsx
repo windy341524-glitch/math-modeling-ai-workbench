@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabase';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, Loader2, UserPlus, ArrowRight, User } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -11,6 +11,8 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTarget = sanitizeRedirect(searchParams.get('redirect')) || '/';
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,10 +36,10 @@ export default function RegisterScreen() {
       // If email confirmation is disabled, we can navigate directly
       // If enabled, we should show a message
       if (data.session) {
-        navigate('/app');
+        navigate(redirectTarget, { replace: true });
       } else {
         alert('注册成功，请检查邮箱进行确认！');
-        navigate('/login');
+        navigate(`/login?redirect=${encodeURIComponent(redirectTarget)}`);
       }
     }
   };
@@ -125,11 +127,23 @@ export default function RegisterScreen() {
 
         <p className="text-center text-sm text-on-surface-variant">
           已有账号？{' '}
-          <Link to="/login" className="font-bold text-primary hover:text-primary-dim">
+          <Link to={`/login?redirect=${encodeURIComponent(redirectTarget)}`} className="font-bold text-primary hover:text-primary-dim">
             返回登录
           </Link>
         </p>
       </motion.div>
     </div>
   );
+}
+
+function sanitizeRedirect(value?: string | null) {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) {
+    return null;
+  }
+
+  if (value.startsWith('/login') || value.startsWith('/register') || value.startsWith('/forgot-password')) {
+    return null;
+  }
+
+  return value;
 }

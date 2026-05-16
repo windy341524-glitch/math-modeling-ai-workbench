@@ -1,14 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, ScanLine, BarChart3, Workflow, AlignLeft, Send, Sparkles, ChevronRight, Bot, Loader2, StopCircle, RefreshCw, Trash2, Copy } from 'lucide-react';
+import { Upload, ScanLine, BarChart3, Workflow, AlignLeft, Send, Sparkles, Bot, Loader2, Trash2, Copy, LogIn } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
-import { sendModelingMessage } from '../services/modelingService';
+import { isModelingAuthError, sendModelingMessage } from '../services/modelingService';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ChatMessage {
   role: 'user' | 'ai';
   content: string;
 }
 
-export default function AIScreen({ navigate, initialText = '' }: any) {
+export default function AIScreen({ navigate: legacyNavigate, initialText = '' }: any) {
+  const routerNavigate = useNavigate();
+  const { session, loading: authLoading } = useAuth();
   const [inputText, setInputText] = useState(initialText);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -25,6 +29,11 @@ export default function AIScreen({ navigate, initialText = '' }: any) {
   }, [initialText]);
 
   const handleAIAction = async (feature: string, promptText: string, aiMaxTokens: number = 2000) => {
+    if (!session) {
+      routerNavigate('/login?redirect=/ai');
+      return;
+    }
+
     if (!promptText.trim()) {
       alert("请输入问题描述或内容");
       return;
@@ -47,6 +56,10 @@ export default function AIScreen({ navigate, initialText = '' }: any) {
       setChatHistory(prev => [...prev, { role: 'ai', content: response.content }]);
       setUsageInfo(response.usage);
     } catch (err: any) {
+      if (isModelingAuthError(err)) {
+        routerNavigate('/login?redirect=/ai');
+        return;
+      }
       setChatHistory(prev => [...prev, { role: 'ai', content: `Error: ${err.message}` }]);
     } finally {
       setIsLoading(false);
@@ -72,9 +85,38 @@ export default function AIScreen({ navigate, initialText = '' }: any) {
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="pt-20 px-4 pb-24 min-h-screen bg-background">
+        <TopBar title="AI Workbench" />
+        <div className="bg-surface-container-lowest rounded-3xl p-8 border border-surface-dim/30 shadow-sm text-center mt-8">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-5">
+            <LogIn className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-on-surface mb-2">请先登录</h2>
+          <p className="text-sm text-on-surface-variant mb-6">登录后才能使用 AI Workbench，并保存对话和项目记录。</p>
+          <button
+            onClick={() => routerNavigate('/login?redirect=/ai')}
+            className="w-full py-3.5 rounded-2xl bg-primary text-white font-bold shadow-lg shadow-primary/20"
+          >
+            去登录
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="pt-20 px-4 pb-32 min-h-screen bg-background flex flex-col">
-      <TopBar onProfile={() => navigate('profile')} />
+      <TopBar onProfile={() => legacyNavigate('profile')} />
 
       <div className="bg-surface-container-lowest rounded-3xl p-4 shadow-sm border border-surface-dim/30 mb-6 focus-within:border-primary/50 focus-within:shadow-md transition-all">
         <textarea 

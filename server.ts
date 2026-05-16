@@ -8,9 +8,15 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+const DEFAULT_PORT = 3000;
+const aiBaseURL = process.env.AI_API_BASE_URL || process.env.MODELING_AI_BASE_URL || undefined;
+const aiApiKey = process.env.MODELING_AI_API_KEY || process.env.AI_API_KEY || "";
+const aiModel = process.env.AI_MODEL || (aiBaseURL?.includes("deepseek") ? "deepseek-chat" : "gpt-4o-mini");
+const aiTimeout = parseInt(process.env.AI_TIMEOUT_MS || "120000", 10);
+
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = parseInt(process.env.PORT || `${DEFAULT_PORT}`, 10);
 
   // Middleware to parse JSON
   app.use(express.json());
@@ -23,8 +29,10 @@ async function startServer() {
 
   // OpenAI Client for Modeling AI
   const openai = new OpenAI({
-    apiKey: process.env.MODELING_AI_API_KEY || "",
-    // baseURL: "https://api.deepseek.com", // Uncomment if using DeepSeek
+    apiKey: aiApiKey,
+    baseURL: aiBaseURL,
+    timeout: aiTimeout,
+    maxRetries: 1,
   });
 
   // No more legacy /api/ai-chat. All calls must go through authenticated /api/modeling/chat.
@@ -135,8 +143,12 @@ Constraints:
 - Do not perform SQL operations or modify system configurations.
 - Always return a valid JSON object.`;
 
+      if (!aiApiKey) {
+        return res.status(500).json({ error: "AI API key is not configured" });
+      }
+
       const aiResponse = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo", // Or another model
+        model: aiModel,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: message }
@@ -209,8 +221,17 @@ Constraints:
       });
 
     } catch (error: any) {
-      console.error("Modeling AI Error:", error.message || error);
-      res.status(500).json({ error: error.message || "Internal server error" });
+      const message = error.message || "Internal server error";
+      console.error("Modeling AI Error:", message);
+
+      if (/timeout|timed out/i.test(message)) {
+        return res.status(504).json({
+          error: "AI service timed out",
+          message: "AI 服务响应超时，请检查 AI_API_BASE_URL / AI_MODEL 是否匹配当前 API Key，或稍后重试。"
+        });
+      }
+
+      res.status(500).json({ error: message });
     }
   });
 

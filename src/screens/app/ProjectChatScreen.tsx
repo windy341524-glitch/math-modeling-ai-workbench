@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Send, 
   ArrowLeft, 
@@ -14,12 +14,15 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { projectService, Project } from '../../services/projectService';
 import { chatService, ChatMessage } from '../../services/chatService';
-import { sendModelingMessage } from '../../services/modelingService';
+import { isModelingAuthError, sendModelingMessage } from '../../services/modelingService';
 import MessageContent from '../../components/renderers/MessageContent';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function ProjectChatScreen() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { session, loading: authLoading } = useAuth();
   const [project, setProject] = useState<Project | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -62,6 +65,10 @@ export default function ProjectChatScreen() {
 
   const handleSendMessage = async () => {
     if (!inputText.trim() || !project || isLoading) return;
+    if (!session) {
+      navigate(`/login?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`);
+      return;
+    }
 
     const userText = inputText;
     setInputText('');
@@ -112,6 +119,10 @@ export default function ProjectChatScreen() {
       console.error('Chat error:', err);
       // Remove optimistic message on error
       setMessages(prev => prev.filter(m => m.id !== tempUserMsg.id));
+      if (isModelingAuthError(err)) {
+        navigate(`/login?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`);
+        return;
+      }
       alert('发送失败: ' + (err.message || '未知错误'));
     } finally {
       setIsLoading(false);
@@ -125,7 +136,7 @@ export default function ProjectChatScreen() {
     });
   };
 
-  if (isInitializing) {
+  if (authLoading || isInitializing) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -256,4 +267,3 @@ export default function ProjectChatScreen() {
     </div>
   );
 }
-

@@ -20,7 +20,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!session) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    const redirect = encodeURIComponent(`${location.pathname}${location.search}`);
+    return <Navigate to={`/login?redirect=${redirect}`} state={{ from: location }} replace />;
   }
 
   return <>{children}</>;
@@ -28,6 +29,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
 export const PublicRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { session, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -38,8 +40,22 @@ export const PublicRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (session) {
-    return <Navigate to="/app" replace />;
+    const params = new URLSearchParams(location.search);
+    const redirectTo = sanitizeRedirect(params.get('redirect')) || '/';
+    return <Navigate to={redirectTo} replace />;
   }
 
   return <>{children}</>;
 };
+
+function sanitizeRedirect(value: string | null) {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) {
+    return null;
+  }
+
+  if (value.startsWith('/login') || value.startsWith('/register') || value.startsWith('/forgot-password')) {
+    return null;
+  }
+
+  return value;
+}

@@ -22,6 +22,11 @@ export default function ProfileScreen() {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const displayName =
+    profile?.full_name ||
+    user?.user_metadata?.full_name ||
+    user?.email?.split('@')[0] ||
+    '未设置姓名';
 
   useEffect(() => {
     if (user) {
@@ -49,7 +54,7 @@ export default function ProfileScreen() {
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/login');
+    navigate('/', { replace: true });
   };
 
   if (authLoading || (loading && !profile)) {
@@ -88,7 +93,7 @@ export default function ProfileScreen() {
              <ShieldCheck className="w-4 h-4 text-white" />
           </div>
         </div>
-        <h2 className="text-2xl font-bold text-on-surface">{profile?.full_name || '未设置姓名'}</h2>
+        <h2 className="text-2xl font-bold text-on-surface">{displayName}</h2>
         <p className="text-sm text-on-surface-variant mt-1 flex items-center gap-1.5">
            <Mail className="w-3.5 h-3.5" />
            {user?.email}

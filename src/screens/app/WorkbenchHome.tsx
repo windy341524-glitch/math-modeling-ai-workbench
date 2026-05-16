@@ -17,6 +17,11 @@ export default function WorkbenchHome() {
     fetchProjects();
   }, []);
 
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/', { replace: true });
+  };
+
   const fetchProjects = async () => {
     setLoading(true);
     try {
@@ -48,7 +53,7 @@ export default function WorkbenchHome() {
           <p className="text-sm text-on-surface-variant">欢迎回来，{user?.user_metadata?.full_name || '建模者'}</p>
         </div>
         <button 
-          onClick={() => signOut()}
+          onClick={handleSignOut}
           className="p-2 rounded-full bg-surface-container hover:bg-surface-dim transition-colors text-on-surface-variant"
         >
           <LogOut className="w-5 h-5" />
